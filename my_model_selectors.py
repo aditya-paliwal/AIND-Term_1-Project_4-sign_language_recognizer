@@ -27,6 +27,7 @@ class ModelSelector(object):
         self.max_n_components = max_n_components
         self.random_state = random_state
         self.verbose = verbose
+        self.n_components = range(self.min_n_components, self.max_n_components + 1)
 
     def select(self):
         raise NotImplementedError
@@ -36,8 +37,9 @@ class ModelSelector(object):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         # warnings.filterwarnings("ignore", category=RuntimeWarning)
         try:
-            hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
+             hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
                                     random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+            
             if self.verbose:
                 print("model created for {} with {} states".format(self.this_word, num_states))
             return hmm_model
@@ -66,11 +68,6 @@ class SelectorBIC(ModelSelector):
 
     http://www2.imm.dtu.dk/courses/02433/doc/ch6_slides.pdf
     Bayesian information criteria: BIC = -2 * logL + p * logN
-    where:
-      L is the likelihood of the fitted model,
-      p is the number of parameters,
-      N is the number of data points.
-    The lower BIC the better.
     """
 
     def select(self):
@@ -80,29 +77,23 @@ class SelectorBIC(ModelSelector):
         :return: GaussianHMM object
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
+        bic_scores = []
+        try:
+            for n in self.n_components:
+                # BIC = −2 log L + p log N
+                # L = is the likelihood of the fitted model
+                # p = is the number of parameters
+                # N = is the number of data points
+                model = self.base_model(n)
+                log_l = model.score(self.X, self.lengths)
+                p = n ** 2 + 2 * n * model.n_features - 1
+                bic_score = -2 * log_l + p * math.log(n)
+                bic_scores.append(bic_score)
+        except Exception as e:
+            pass
 
-        # Go through each model and compute its BIC score, only keeping track of the one with min BIC
-        # If two BICs are mins, return the model with lower complexity
-        best_num_components, lowest_BIC = None, None
-        for num_components in range(self.min_n_components, self.max_n_components + 1):
-            try:
-                logL = self.base_model(num_components).score(self.X, self.lengths)
-                logN = np.log(len(self.X))
-                # Per https://discussions.udacity.com/t/number-of-parameters-bic-calculation/233235/3:
-                # The parameters are the transition probabilities and the emission probabilities.
-                # For the transition matrix, it's going to be a N x N matrix, where N is the number of states. The free parameters for the transition matrix is N * (N - 1). This is because the rows must sum up to one, so the last value is fixed to whatever value to add up to 1.
-                # For the emission matrix, since the covariance_type is "diag" by default", if the model has M features, then there are M means and M diagonal values in the covariance matrix, for 2 * M per state. The final total is 2 * theNumberOfStates * theNumberOfFeatures.
-                p = num_components * (num_components-1) + 2 * len(self.X[0]) * num_components
-                BIC = -2 * logL + p * logN
-                if lowest_BIC is None or lowest_BIC > BIC:
-                    lowest_BIC, best_num_components = BIC, num_components
-            except:
-                pass
-
-        if best_num_components is None:
-            return self.base_model(self.n_constant)
-        else:
-            return self.base_model(best_num_components)
+        states = self.n_components[np.argmax(bic_scores)] if bic_scores else self.n_constant
+        return self.base_model(states)
 
 class SelectorDIC(ModelSelector):
     ''' select best model based on Discriminative Information Criterion
@@ -111,87 +102,51 @@ class SelectorDIC(ModelSelector):
     Document Analysis and Recognition, 2003. Proceedings. Seventh International Conference on. IEEE, 2003.
     http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.58.6208&rep=rep1&type=pdf
     DIC = log(P(X(i)) - 1/(M-1)SUM(log(P(X(all but i))
-    where:
-      M is the number of words
-      log(P(X(i)) is the log-likelihood of the fitted model for the current word,
-      1/(M-1)SUM(log(P(X(all but i)) is the average of the log-likelihoods of the fitted models for all the other words,
-    The higher DIC the better.
     '''
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
+        dic_scores = []
+        logs_l = []
+        try:
+            for n_component in self.n_components:
+                model = self.base_model(n_component)
+                logs_l.append(model.score(self.X, self.lengths))
+            sum_logs_l = sum(logs_l)
+            m = len(self.n_components)
+            for log_l in logs_l:
+                # DIC = log(P(X(i)) - 1/(M-1)SUM(log(P(X(all but i))
+                other_words_likelihood = (sum_logs_l - log_l) / (m - 1)
+                dic_scores.append(log_l - other_words_likelihood)
+        except Exception as e:
+            pass
 
-        # Go through each model and compute its DIC score, only keeping track of the one with max DIC
-        # If two DICs are maxs, return the model with lower complexity
-        best_num_components, highest_DIC = None, None
-        for num_components in range(self.min_n_components, self.max_n_components + 1):
-            try:
-                log_P_X_i = self.base_model(num_components).score(self.X, self.lengths)
-
-                sum_log_P_X_all_but_i = 0.
-                words = list(self.words.keys())
-                M = len(words)
-                words.remove(self.this_word)
-
-                for word in words:
-                    try:
-                        model_selector_all_but_i = ModelSelector(self.words, self.hwords, word, self.n_constant, self.min_n_components, self.max_n_components, self.random_state, self.verbose)
-                        sum_log_P_X_all_but_i += model_selector_all_but_i.base_model(num_components).score(model_selector_all_but_i.X, model_selector_all_but_i.lengths)
-                    except:
-                        M = M - 1
-
-                DIC = log_P_X_i - sum_log_P_X_all_but_i / (M - 1)
-
-                if highest_DIC is None or highest_DIC < DIC:
-                  highest_DIC, best_num_components = DIC, num_components
-            except:
-                pass
-
-        if best_num_components is None:
-            return self.base_model(self.n_constant)
-        else:
-            return self.base_model(best_num_components)
+        states = self.n_components[np.argmax(dic_scores)] if dic_scores else self.n_constant
+        return self.base_model(states)
 
 class SelectorCV(ModelSelector):
-    ''' select best model based on average log Likelihood of cross-validation folds
-        The higher average log Likelihood the better.
-        Note: here we explicitly use 3-fold CV
-    '''
-    NUM_FOLDS = 3
+    ''' select best model based on average log Likelihood of cross-validation folds'''
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
+        mean_scores = []
+        # Save reference to 'KFold' in variable as shown in notebook
+        split_method = KFold()
+        try:
+            for n_component in self.n_components:
+                model = self.base_model(n_component)
+                # Fold and calculate model mean scores
+                fold_scores = []
+                for _, test_idx in split_method.split(self.sequences):
+                    # Get test sequences
+                    test_X, test_length = combine_sequences(test_idx, self.sequences)
+                    # Record each model score
+                    fold_scores.append(model.score(test_X, test_length))
 
-        # Go through each model and compute its 3-fold average log Likelihood, only keeping track of the max value
-        # If two 3-fold average log Likelihoods are maxs, return the model with lower complexity
-        best_num_components, highest_avg_logL = None, None
-        for num_components in range(self.min_n_components, self.max_n_components + 1):
-            sum_logL = 0.
-            count_logL = 0
-            try:
-                # Compute average log Likelihood, using jupyter notebook code as reference:
-                # In order to run hmmlearn training using the X,lengths tuples on the new folds,
-                # subsets must be combined based on the indices given for the folds.
-                # A helper utility has been provided in the asl_utils module named combine_sequences for this purpose.
-                split_method = KFold(SelectorCV.NUM_FOLDS)
-                for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
-                    X, lengths = combine_sequences(cv_train_idx,self.sequences)
+                # Compute mean of all fold scores
+                mean_scores.append(np.mean(fold_scores))
+        except Exception as e:
+            pass
 
-                    try:
-                        sum_logL += self.base_model(num_components).score(X, lengths)
-                        count_logL += 1
-                    except:
-                        pass
-
-                if count_logL > 0:
-                    avg_logL = sum_logL / count_logL
-                    if highest_avg_logL is None or highest_avg_logL < avg_logL:
-                      highest_avg_logL, best_num_components = avg_logL, num_components
-            except:
-                pass
-
-        if best_num_components is None:
-            return self.base_model(self.n_constant)
-        else:
-            return self.base_model(best_num_components)
-
+        states = self.n_components[np.argmax(mean_scores)] if mean_scores else self.n_constant
+        return self.base_model(states)
