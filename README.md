@@ -1,5 +1,9 @@
-# Project Titl
+# Project Title
  Sign Language Recognition System
+ 
+## Introduction
+
+This was my last project in Udacity Artificial Intelligence Nanodegree Term-1. In this project, HMMs (Hidden Markov Models) were used to recognize gestures in American Sign Language, from individual words to complete sentences. The system was trained on a dataset of videos that have been pre-processed and annotated, and test on novel sequences.
 
 ### Install
 
