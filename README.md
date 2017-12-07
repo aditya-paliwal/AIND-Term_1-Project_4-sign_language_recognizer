@@ -1,6 +1,5 @@
-# Artificial Intelligence Engineer Nanodegree
-## Probabilistic Models
-## Project: Sign Language Recognition System
+# Project Titl
+ Sign Language Recognition System
 
 ### Install
 
@@ -14,16 +13,10 @@ This project requires **Python 3** and the following Python libraries installed:
 - [jupyter](http://ipython.org/notebook.html)
 - [hmmlearn](http://hmmlearn.readthedocs.io/en/latest/)
 
-Notes: 
-1. It is highly recommended that you install the [Anaconda](http://continuum.io/downloads) distribution of Python and load the environment included in the "Your conda env for AI ND" lesson.
-2. The most recent development version of hmmlearn, 0.2.1, contains a bugfix related to the log function, which is used in this project.  In order to install this version of hmmearn, install it directly from its repo with the following command from within your activated Anaconda environment:
-```sh
-pip install git+https://github.com/hmmlearn/hmmlearn.git
-```
 
 ### Code
 
-A template notebook is provided as `asl_recognizer.ipynb`. The notebook is a combination tutorial and submission document.  Some of the codebase and some of your implementation will be external to the notebook. For submission, complete the **Submission** sections of each part.  This will include running your implementations in code notebook cells, answering analysis questions, and passing provided unit tests provided in the codebase and called out in the notebook. 
+A template notebook is provided as `asl_recognizer.ipynb`. The notebook is a combination tutorial and submission document. 
 
 ### Run
 
@@ -31,7 +24,7 @@ In a terminal or command window, navigate to the top-level project directory `AI
 
 `jupyter notebook asl_recognizer.ipynb`
 
-This will open the Jupyter Notebook software and notebook in your browser which is where you will directly edit and run your code. Follow the instructions in the notebook for completing the project.
+This will open the Jupyter Notebook software and notebook in the browser which is where we can directly edit and run our code. 
 
 
 ### Additional Information
